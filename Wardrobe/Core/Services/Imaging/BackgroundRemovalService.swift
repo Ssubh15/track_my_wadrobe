@@ -77,7 +77,7 @@ struct CoreMLCutoutService: CutoutService {
         }
         let model: MLModel
         do {
-            model = try MLModel(contentsOf: modelURL)
+            model = try loadModel(at: modelURL)
         } catch {
             recordStatus("U2NetP failed to load: \(error.localizedDescription); used Apple Vision")
             throw error
@@ -100,6 +100,20 @@ struct CoreMLCutoutService: CutoutService {
         }
         recordStatus("U2NetP used")
         return try MaskImageProcessor.result(source: source, mask: mask, extractionModel: .u2Net)
+    }
+
+    /// The Neural Engine planner rejects this model on some devices (error -14 on iPhone SE 2020),
+    /// so skip it: try GPU, then fall back to CPU only. The 320×320 U²-NetP is fast on either.
+    private static func loadModel(at url: URL) throws -> MLModel {
+        var lastError: Error = BackgroundRemovalError.modelUnavailable
+        for units in [MLComputeUnits.cpuAndGPU, .cpuOnly] {
+            let configuration = MLModelConfiguration()
+            configuration.computeUnits = units
+            do {
+                return try MLModel(contentsOf: url, configuration: configuration)
+            } catch { lastError = error }
+        }
+        throw lastError
     }
 
     private static func recordStatus(_ status: String) {
