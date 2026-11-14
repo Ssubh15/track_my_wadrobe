@@ -37,7 +37,7 @@ private final class OOTDSegmentationDebugViewModel {
     private(set) var isRunning = false
     private(set) var progress = ""
     private(set) var error: String?
-    private(set) var deviceModel = Self.deviceIdentifier
+    private(set) var deviceModel = OOTDSegmentationDebugViewModel.deviceIdentifier
     private(set) var computeUnits = "All available (CPU, GPU, Neural Engine)"
     var selectedPhoto: PhotosPickerItem?
 
