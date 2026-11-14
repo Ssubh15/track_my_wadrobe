@@ -55,10 +55,10 @@ private final class OOTDSegmentationDebugViewModel {
     private static var deviceIdentifier: String {
         var system = utsname()
         uname(&system)
-        return withUnsafePointer(to: &system.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: system.machine)) {
-                String(cString: $0)
-            }
+        let machine = system.machine
+        let capacity = MemoryLayout.size(ofValue: machine)
+        return withUnsafeBytes(of: machine) { bytes in
+            String(decoding: bytes.prefix(capacity).prefix { $0 != 0 }, as: UTF8.self)
         }
     }
 
