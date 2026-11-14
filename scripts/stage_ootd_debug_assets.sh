@@ -7,8 +7,11 @@ SOURCE_GOLDENS="$ROOT/tools/ootd_model/golden"
 TARGET_ROOT="$ROOT/Wardrobe/Resources/Debug"
 
 if [[ ! -d "$SOURCE_IMAGES" ]] || ! find "$SOURCE_IMAGES" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) -print -quit | grep -q .; then
-    echo "No OOTD test images found under tools/ootd_model/test_images." >&2
-    exit 1
+    # Test photos are not committed (they may show real people). The Debug evaluation
+    # screen simply has nothing to show until you add your own images locally.
+    echo "Warning: no OOTD test images found under tools/ootd_model/test_images; skipping Debug evaluation assets." >&2
+    rm -rf "$ROOT/Wardrobe/Resources/Debug/OOTDTestImages" "$ROOT/Wardrobe/Resources/Debug/golden"
+    exit 0
 fi
 
 rm -rf "$TARGET_ROOT/OOTDTestImages" "$TARGET_ROOT/golden"
