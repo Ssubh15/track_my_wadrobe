@@ -10,7 +10,7 @@ struct GarmentDetailView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.large) {
-                    GarmentCard(title: item.subtype ?? item.category.displayName, subtitle: item.brand, systemImage: item.category.systemImage)
+                    GarmentCard(title: item.subtype ?? item.category.displayName, subtitle: item.brand, systemImage: item.category.systemImage, image: viewModel.itemImages[item.id])
                     HStack { Label(item.category.displayName, systemImage: item.category.systemImage); Spacer(); Button { viewModel.toggleFavorite(item) } label: { Image(systemName: item.isFavorite ? "heart.fill" : "heart") }.accessibilityLabel(item.isFavorite ? "Remove favorite" : "Add favorite") }.foregroundStyle(Theme.Colors.accent)
                     detailRow("Color", item.primaryColorHex); detailRow("Season", item.season); detailRow("Material", item.material); detailRow("Size", item.size); detailRow("Notes", item.notes)
                     VStack(spacing: 12) { Button("Duplicate") { viewModel.duplicate(item); dismiss() }.buttonStyle(.bordered); Button(item.isArchived ? "Unarchive" : "Archive") { viewModel.toggleArchive(item); dismiss() }.buttonStyle(.bordered); Button("Delete", role: .destructive) { viewModel.delete(item); dismiss() }.buttonStyle(.bordered) }
