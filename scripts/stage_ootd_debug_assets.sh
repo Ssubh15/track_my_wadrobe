@@ -7,8 +7,10 @@ SOURCE_GOLDENS="$ROOT/tools/ootd_model/golden"
 TARGET_ROOT="$ROOT/Wardrobe/Resources/Debug"
 
 if [[ ! -d "$SOURCE_IMAGES" ]] || ! find "$SOURCE_IMAGES" -maxdepth 1 -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) -print -quit | grep -q .; then
-    echo "No OOTD test images found under tools/ootd_model/test_images." >&2
-    exit 1
+    # Test photos are deliberately excluded from the public repo; skip debug staging.
+    echo "No OOTD test images found under tools/ootd_model/test_images; skipping debug asset staging." >&2
+    if [[ -n "${GITHUB_ENV:-}" ]]; then echo "OOTD_DEBUG_ASSETS=0" >> "$GITHUB_ENV"; fi
+    exit 0
 fi
 
 rm -rf "$TARGET_ROOT/OOTDTestImages" "$TARGET_ROOT/golden"
@@ -24,4 +26,5 @@ if [[ "$GOLDEN_COUNT" -eq 0 ]]; then
     echo "No golden masks found under tools/ootd_model/golden; DEBUG agreement scores will be unavailable." >&2
     exit 1
 fi
+if [[ -n "${GITHUB_ENV:-}" ]]; then echo "OOTD_DEBUG_ASSETS=1" >> "$GITHUB_ENV"; fi
 echo "Staged $IMAGE_COUNT test images and $GOLDEN_COUNT golden masks for Debug."

@@ -58,6 +58,7 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
 
       - name: Verify debug evaluation assets are bundled
+        if: env.OOTD_DEBUG_ASSETS == '1'
         shell: bash
         run: |
           set -euo pipefail
