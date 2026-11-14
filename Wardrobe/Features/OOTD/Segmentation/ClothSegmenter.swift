@@ -224,7 +224,12 @@ actor ClothSegmenter {
     }
 
     private static func renderRawMask(labels: [UInt8], width: Int, height: Int) -> UIImage {
-        let colors: [UInt8: (UInt8, UInt8, UInt8)] = [4: (255, 0, 0), 5: (0, 0, 255), 6: (0, 0, 255), 7: (255, 0, 255), 9: (0, 255, 0), 10: (0, 255, 0)]
+        // Distinct colours so hair, skin and bag are distinguishable in diagnostics.
+        let colors: [UInt8: (UInt8, UInt8, UInt8)] = [
+            1: (255, 165, 0), 2: (90, 50, 20), 3: (128, 128, 128), 4: (255, 0, 0), 5: (0, 128, 255), 6: (0, 0, 255),
+            7: (255, 0, 255), 8: (255, 255, 0), 9: (0, 255, 0), 10: (0, 255, 0), 11: (255, 200, 170),
+            12: (230, 170, 140), 13: (230, 170, 140), 14: (200, 140, 110), 15: (200, 140, 110), 16: (0, 255, 255), 17: (128, 0, 128)
+        ]
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
         for i in 0..<min(labels.count, width * height) { let c = colors[labels[i]] ?? (0, 0, 0); bytes[i*4] = c.0; bytes[i*4+1] = c.1; bytes[i*4+2] = c.2; bytes[i*4+3] = labels[i] == 0 ? 0 : 255 }
         let provider = CGDataProvider(data: Data(bytes) as CFData)!
