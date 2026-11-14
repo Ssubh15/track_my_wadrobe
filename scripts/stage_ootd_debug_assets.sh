@@ -21,7 +21,8 @@ fi
 IMAGE_COUNT="$(find "$TARGET_ROOT/OOTDTestImages" -maxdepth 1 -type f | wc -l | tr -d ' ')"
 GOLDEN_COUNT="$(find "$TARGET_ROOT/golden" -maxdepth 1 -type f -iname '*.png' | wc -l | tr -d ' ')"
 if [[ "$GOLDEN_COUNT" -eq 0 ]]; then
-    echo "No golden masks found under tools/ootd_model/golden; DEBUG agreement scores will be unavailable." >&2
-    exit 1
+    # Goldens are optional: they are generated locally by tools/ootd_model/convert.py.
+    # Without them the Debug screen still runs the model but shows no agreement score.
+    echo "Warning: no golden masks found under tools/ootd_model/golden; DEBUG agreement scores will be unavailable." >&2
 fi
 echo "Staged $IMAGE_COUNT test images and $GOLDEN_COUNT golden masks for Debug."

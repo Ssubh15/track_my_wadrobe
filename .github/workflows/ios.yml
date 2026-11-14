@@ -64,22 +64,15 @@ jobs:
           APP_PATH="$(find "$PWD/build/DebugDerivedData/Build/Products/Debug-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
           test -n "$APP_PATH"
           test -d "$APP_PATH/OOTDTestImages"
-          test -d "$APP_PATH/golden"
           test "$(find "$APP_PATH/OOTDTestImages" -type f | wc -l | tr -d ' ')" -gt 0
-          test "$(find "$APP_PATH/golden" -type f -name '*.png' | wc -l | tr -d ' ')" -gt 0
+          # Golden masks are optional (generated locally); only check them when some were staged.
+          if find tools/ootd_model/golden -maxdepth 1 -type f -iname '*.png' -print -quit | grep -q .; then
+            test "$(find "$APP_PATH/golden" -type f -name '*.png' | wc -l | tr -d ' ')" -gt 0
+          fi
           if find "$APP_PATH/OOTDTestImages" -type f | grep -q 'gitkeep'; then
             echo "Placeholder files were copied as images." >&2
             exit 1
           fi
-
-      - name: Verify Release excludes OOTD debug assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
-          test -n "$APP_PATH"
-          test ! -e "$APP_PATH/OOTDTestImages"
-          test ! -e "$APP_PATH/golden"
 
       # Find an available iPhone simulator dynamically, then boot it before testing.
       - name: Find and boot an iPhone simulator
@@ -135,6 +128,15 @@ jobs:
           APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
           test -n "$APP_PATH"
           test -d "$APP_PATH/OOTDClothSegmenter_w8.mlmodelc" || test -d "$APP_PATH/Frameworks/OOTDClothSegmenter_w8.mlmodelc"
+
+      - name: Verify Release excludes OOTD debug assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test ! -e "$APP_PATH/OOTDTestImages"
+          test ! -e "$APP_PATH/golden"
 
       # Wrap the unsigned .app in the standard Payload directory required by an IPA.
       - name: Package unsigned IPA

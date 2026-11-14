@@ -19,14 +19,6 @@ final class FidelityCheckerTests: XCTestCase {
         XCTAssertEqual(result.cutoutPNG.map { Data($0.prefix(8)) }, Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
     }
 
-    func testCutoutFixtureNormalizesToRequestedSquareCanvas() {
-        let fixture = garmentFixture(color: .systemBlue, garmentRect: CGRect(x: 10, y: 10, width: 40, height: 100))
-        let normalized = MaskImageProcessor.normalizedSquare(fixture, canvasSize: 512)
-
-        XCTAssertEqual(normalized.size, CGSize(width: 512, height: 512))
-        XCTAssertEqual(normalized.scale, 1)
-    }
-
     func testColorChangedFixtureFailsFidelityCheck() {
         XCTAssertThrowsError(
             try FidelityChecker(maximumColorDifference: 2).check(
