@@ -46,9 +46,7 @@ struct ClothSegformerClothingParser: ClothingParser {
                 return GarmentRegion(kind: kind, mask: mask, confidence: 0.75, occlusionReason: nil)
             }
         } catch {
-            #if DEBUG
-            assertionFailure("OOTDClothSegmenter_w8 failed to load or segment: \(error)")
-            #endif
+            NSLog("OOTDClothSegmenter_w8 failed to load or segment: %@", String(describing: error))
             logFallback("segmentation failed: \(error)")
             OutfitDiagnostics.recordSegmenterFailure(error)
             return try await legacy.parse(personMask: personMask, in: image)
