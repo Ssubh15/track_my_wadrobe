@@ -28,7 +28,7 @@ final class CutoutServiceTests: XCTestCase {
         }
 
         let resized = MaskImageProcessor.resizeMask(mask, to: CGSize(width: 40, height: 20))
-        let bounds = resized.flatMap { image in
+        let bounds: CGRect? = resized.flatMap { image -> CGRect? in
             guard let cgImage = image.cgImage else { return nil }
             return MaskImageProcessor.foregroundBounds(in: cgImage)
         }
