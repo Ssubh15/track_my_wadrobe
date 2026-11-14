@@ -115,7 +115,7 @@ struct CategoryPickerSheet: View {
         NavigationStack {
             List {
                 if !predictions.isEmpty { Section("Suggestions") { ForEach(predictions) { prediction in categoryRow(prediction.category, confidence: prediction.confidence) } } }
-                Section("All categories") { ForEach(GarmentCategory.builtIn, id: \.self) { category in categoryRow(category, confidence: nil) } }
+                Section("All categories") { ForEach(GarmentCategory.builtIn + CategoryTagStore.storedCategories().map { GarmentCategory.custom($0) }, id: \.self) { category in categoryRow(category, confidence: nil) } }
             }
             .navigationTitle("Choose category")
             .navigationBarTitleDisplayMode(.inline)

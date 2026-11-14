@@ -28,3 +28,36 @@ The following questions must be answered before the affected implementation is f
 24. The PRD says “optional iCloud sync” and also names CloudKit in the technical direction: should persistence abstractions be designed for sync now while shipping local-only first, or should sync be implemented in the initial release?
 25. The PRD mentions “the original detailed brief remains at the repository root,” but no filename is specified here. Which brief is authoritative if it conflicts with `docs/PRD.md`?
 26. Outfit extraction currently uses `StubClothingParser`, a clearly labelled body-proportion baseline that creates temporary, editable candidate masks only. It is not semantically reliable enough to finalize garment boundaries. Which approved on-device Core ML clothing-parsing model (classes, license, size, and confidence/occlusion thresholds) will replace it before the feature ships?
+
+## Status update: 2026-11-14 (additions only; the questions above are unchanged)
+
+Recorded from the repository state at version 12.3.1. These notes do not replace or close any question above.
+
+### Progress on existing questions
+
+- **Question 26 (clothing-parsing model):** Outfit extraction no longer defaults to `StubClothingParser`. `OOTDSegmentationMode.defaultMode` is now `.clothSegformer`, which runs the on-device Core ML model `OOTDClothSegmenter_w8` (`Wardrobe/Features/AddItem/OutfitMode/Segmentation/`). The legacy stub remains as a fallback. The model's license, size, class list and confidence/occlusion thresholds are still not recorded here.
+- **Question 25 (authoritative brief):** The detailed brief at the repository root appears to be `Wardrobe App Spec and Codex Build Guide.md`. Which document wins when it conflicts with `docs/PRD.md` is still unanswered.
+- **Question 9 (keep original outfit photo):** Settings has a "Keep originals" toggle for outfit photos. The PRD default is to delete the original unless the user chooses otherwise. The confirmation UI and retention rules are not yet defined.
+
+### Decisions stated by the project owner
+
+- All photo processing happens on device and nothing leaves the phone.
+- The public repository is `Ssubh15/track_my_wadrobe`. The original private repository is kept only as a backup.
+- The baseline is the contents of `backup/working-ootd-2026-11-14` (version 12.2). That backup branch is not modified; further fine-tuning goes into the current version only.
+- Versions are tracked by number (12.3, 12.3.1, ...) without git tags.
+
+### Build status against the Codex Build Guide
+
+- Prompts 0 to 11: implemented. Outfit mode (Prompts 10 and 11) is in the fine-tuning stage.
+- Prompt 9 (brand lookup): code exists. The PRD lists brand lookup as post-MVP (question 14).
+- Prompt 12 (settings, privacy, sync): only partly done. Missing are data export, delete all data, the privacy screen, category and tag management, and the CloudKit flag. Questions 18 to 20 are still open.
+- Prompt 13 (Insights): not started. The screen is a placeholder.
+- Prompt 14 (polish and release checklist): not started.
+
+## Status update: version 12.4 (screens from the Claude Design mockups; additions only)
+
+- Added: Onboarding (shown once), Insights charts, Privacy and your data, Categories and tags, and a regrouped Settings screen. No services, persistence, models, DIContainer or protected files were changed.
+- Settings keeps every existing control: Keep original photos, all diagnostics rows and the diagnostic images switch, and the debug-only tools. The two dead "Privacy" and "Appearance" labels were replaced by real rows.
+- Custom categories and tags are stored in UserDefaults (`CategoryTagStore`). Custom categories also appear in the "Choose category" sheet. Deleting a category moves its items to Other; renaming one updates its items. Tags are a managed list only and are not yet offered when reviewing an item.
+- Export my data and Delete all data are shown as in the design but disabled ("Coming soon"). Question 20 stays open.
+- The About row shows the app version, now set to 12.4 in `project.yml` (it was 1.0.0).
