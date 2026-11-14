@@ -73,15 +73,6 @@ jobs:
             exit 1
           fi
 
-      - name: Verify Release excludes OOTD debug assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
-          test -n "$APP_PATH"
-          test ! -e "$APP_PATH/OOTDTestImages"
-          test ! -e "$APP_PATH/golden"
-
       # Find an available iPhone simulator dynamically, then boot it before testing.
       - name: Find and boot an iPhone simulator
         shell: bash
@@ -128,6 +119,15 @@ jobs:
           CODE_SIGNING_REQUIRED=NO
           CODE_SIGN_IDENTITY=""
           DEVELOPMENT_TEAM=""
+
+      - name: Verify Release excludes OOTD debug assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test ! -e "$APP_PATH/OOTDTestImages"
+          test ! -e "$APP_PATH/golden"
 
       - name: Verify OOTD model is compiled into the app
         shell: bash
