@@ -45,12 +45,25 @@ final class CutoutServiceTests: XCTestCase {
         let array = MLMultiArray(MLShapedArray<Float16>(scalars: scalars, shape: [1, 1, 4, 4]))
         XCTAssertEqual(array.dataType, .float16)
 
-        let mask = try MaskImageProcessor.image(from: array, size: CGSize(width: 40, height: 40))
-        let bounds = mask?.cgImage.flatMap { MaskImageProcessor.foregroundBounds(in: $0) }
+        let mask = try XCTUnwrap(MaskImageProcessor.image(from: array, size: CGSize(width: 4, height: 4)))
+        let pixels = try XCTUnwrap(Self.grayPixels(of: mask))
+        XCTAssertEqual(pixels.count, 16)
+        for y in 0..<4 {
+            for x in 0..<4 {
+                let value = pixels[y * 4 + x]
+                if x < 2 { XCTAssertGreaterThan(value, 200, "pixel (\(x),\(y)) all=\(pixels)") }
+                else { XCTAssertLessThan(value, 55, "pixel (\(x),\(y)) all=\(pixels)") }
+            }
+        }
+    }
 
-        XCTAssertNotNil(bounds)
-        XCTAssertLessThan(bounds?.maxX ?? 40, 30)
-        XCTAssertEqual(bounds?.height ?? 0, 40, accuracy: 2)
+    private static func grayPixels(of image: UIImage) -> [UInt8]? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = cgImage.width, height = cgImage.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixels
     }
 
     func testBundledU2NetModelIsFoundByCutoutService() {
