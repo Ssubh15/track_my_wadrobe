@@ -5,36 +5,53 @@ struct SettingsView: View {
     @State private var didSeed = false
     @AppStorage("keepOriginalOutfitPhotos") private var keepOriginalOutfitPhotos = false
     @AppStorage("saveDiagnosticImages") private var saveDiagnosticImages = false
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Label("Privacy", systemImage: "hand.raised")
-                    Label("Appearance", systemImage: "circle.lefthalf.filled")
+                    Toggle("Keep original photos", isOn: $keepOriginalOutfitPhotos)
                 } header: {
-                    SectionHeader(title: "Preferences")
-                }
-                Section("Outfit photos") {
-                    Toggle("Keep originals", isOn: $keepOriginalOutfitPhotos)
+                    Text("Outfit photos")
+                } footer: {
                     Text("When off, Wardrobe does not retain the full outfit photo after extraction. Saved items contain garment cut-outs only.")
-                        .font(Theme.TypeStyles.caption)
-                        .foregroundStyle(Theme.Colors.muted)
                 }
-                Section("Diagnostics") {
+
+                Section("Wardrobe") {
+                    NavigationLink("Categories and tags") {
+                        CategoriesAndTagsView(repository: repository)
+                    }
+                }
+
+                Section("Privacy") {
+                    NavigationLink("Privacy and your data") {
+                        PrivacyView()
+                    }
+                }
+
+                Section {
                     LabeledContent("Outfit segmenter in use", value: OutfitDiagnostics.currentSegmenterName)
                     LabeledContent("Load status", value: UserDefaults.standard.string(forKey: OutfitDiagnostics.modelErrorKey).map { "Failed: \($0)" } ?? "Loaded")
                     LabeledContent("Background removal model", value: UserDefaults.standard.string(forKey: OutfitDiagnostics.u2NetStatusKey) ?? "U2NetP not checked")
                     Toggle("Save diagnostic images", isOn: $saveDiagnosticImages)
-                    Text("When enabled, extraction images are saved in Documents/Diagnostics so you can inspect them in Files.")
-                        .font(Theme.TypeStyles.caption).foregroundStyle(Theme.Colors.muted)
-                }
-                Section {
-                    Text("Wardrobe keeps photo processing on your device.")
-                        .font(Theme.TypeStyles.body)
-                        .foregroundStyle(Theme.Colors.muted)
                 } header: {
-                    SectionHeader(title: "About")
+                    Text("Diagnostics")
+                } footer: {
+                    Text("When enabled, extraction images are saved in Documents/Diagnostics so you can inspect them in Files.")
                 }
+
+                Section {
+                    LabeledContent("Version", value: appVersion)
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Wardrobe keeps photo processing on your device.")
+                }
+
                 #if DEBUG
                 Section("Developer") {
                     Button("Seed sample wardrobe") { seedSamples() }
@@ -45,6 +62,8 @@ struct SettingsView: View {
                 }
                 #endif
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.Colors.canvas)
             .navigationTitle("Settings")
         }
     }

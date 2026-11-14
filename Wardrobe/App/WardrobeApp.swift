@@ -16,8 +16,20 @@ private struct AppTabView: View {
     @Environment(DIContainer.self) private var dependencies
     @State private var selectedTab: AppTab = .wardrobe
     @State private var isAddPresented = false
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     var body: some View {
+        ZStack {
+            tabs
+            if !hasSeenOnboarding {
+                OnboardingView { withAnimation { hasSeenOnboarding = true } }
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selectedTab) {
             NavigationStack { WardrobeHomeView(repository: dependencies.wardrobeRepository, imageStore: dependencies.imageStore) }
                 .tabItem { Label("Wardrobe", systemImage: "tshirt") }
@@ -27,7 +39,7 @@ private struct AppTabView: View {
                 .tabItem { Label("Add", systemImage: "plus.circle.fill") }
                 .tag(AppTab.add)
 
-            InsightsView()
+            InsightsView(repository: dependencies.wardrobeRepository)
                 .tabItem { Label("Insights", systemImage: "chart.bar") }
                 .tag(AppTab.insights)
 
