@@ -62,7 +62,8 @@ struct MaskEditingService: MaskEditing {
             let context = rendererContext.cgContext
             context.setFillColor(UIColor.black.cgColor)
             context.fill(CGRect(origin: .zero, size: size))
-            context.draw(maskImage, in: CGRect(origin: .zero, size: size))
+            // UIImage.draw keeps the mask upright in UIKit's flipped renderer context, matching the stroke coordinates.
+            UIImage(cgImage: maskImage).draw(in: CGRect(origin: .zero, size: size))
             context.setStrokeColor((stroke.tool == .erase ? UIColor.black : UIColor.white).cgColor)
             context.setFillColor((stroke.tool == .erase ? UIColor.black : UIColor.white).cgColor)
             context.setLineWidth(brushDiameter)
@@ -98,52 +99,48 @@ struct MaskEditingService: MaskEditing {
               let maskImage = mask.normalizedCGImage else {
             throw MaskEditingError.unsupportedImage
         }
+        let width = sourceImage.width
+        let height = sourceImage.height
+        guard width > 0, height > 0 else { throw MaskEditingError.unsupportedImage }
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
 
-        let size = CGSize(width: CGFloat(sourceImage.width), height: CGFloat(sourceImage.height))
-        guard let alphaMask = makeAlphaMask(from: maskImage, size: size) else {
-            throw MaskEditingError.unableToRenderCutout
+        // Both bitmaps are drawn into plain (un-flipped) CGContexts, so memory row 0 is the
+        // top row of the picture for the mask and the source alike. Going through a
+        // UIGraphicsImageRenderer's flipped context with clip(to:mask:) turned the cut-out
+        // upside down, which scrambled every outfit crop.
+        var alpha = [UInt8](repeating: 0, count: width * height)
+        let maskDrawn = alpha.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.interpolationQuality = .high
+            context.draw(maskImage, in: bounds)
+            return true
         }
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = false
-        format.scale = 1
-        let cutout = UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
-            let context = rendererContext.cgContext
-            context.clip(to: CGRect(origin: .zero, size: size), mask: alphaMask)
-            context.draw(sourceImage, in: CGRect(origin: .zero, size: size))
-        }
-        guard cutout.cgImage != nil else { throw MaskEditingError.unableToRenderCutout }
-        return cutout
-    }
+        guard maskDrawn else { throw MaskEditingError.unableToRenderCutout }
 
-    private func makeAlphaMask(from image: CGImage, size: CGSize) -> CGImage? {
-        let width = Int(size.width)
-        let height = Int(size.height)
-        var pixels = [UInt8](repeating: 0, count: width * height)
-        guard let context = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width,
-            space: CGColorSpaceCreateDeviceGray(),
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return nil }
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(origin: .zero, size: size))
-        // Quartz clip masks use 0 for opaque and 255 for transparent. Wardrobe masks
-        // use the clearer white-for-foreground convention, so invert at this boundary.
-        pixels = pixels.map { 255 - $0 }
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData) else { return nil }
-        return CGImage(
-            maskWidth: width,
-            height: height,
-            bitsPerComponent: 8,
-            bitsPerPixel: 8,
-            bytesPerRow: width,
-            provider: provider,
-            decode: nil,
-            shouldInterpolate: true
-        )
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        let cutoutImage: CGImage? = rgba.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return nil }
+            context.draw(sourceImage, in: bounds)
+            // Scale premultiplied colour and alpha by the mask: white keeps a pixel, black removes it.
+            let pixels = buffer.bindMemory(to: UInt8.self)
+            for index in 0..<(width * height) {
+                let coverage = Int(alpha[index])
+                guard coverage != 255 else { continue }
+                for channel in 0..<4 {
+                    let offset = index * 4 + channel
+                    pixels[offset] = UInt8((Int(pixels[offset]) * coverage + 127) / 255)
+                }
+            }
+            return context.makeImage()
+        }
+        guard let cutoutImage else { throw MaskEditingError.unableToRenderCutout }
+        return UIImage(cgImage: cutoutImage, scale: 1, orientation: .up)
     }
 }
 

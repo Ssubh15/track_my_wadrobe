@@ -37,7 +37,7 @@ private final class OOTDSegmentationDebugViewModel {
     private(set) var isRunning = false
     private(set) var progress = ""
     private(set) var error: String?
-    private(set) var deviceModel = Self.deviceIdentifier
+    private(set) var deviceModel = OOTDSegmentationDebugViewModel.deviceIdentifier
     private(set) var computeUnits = "All available (CPU, GPU, Neural Engine)"
     var selectedPhoto: PhotosPickerItem?
 
@@ -55,10 +55,9 @@ private final class OOTDSegmentationDebugViewModel {
     private static var deviceIdentifier: String {
         var system = utsname()
         uname(&system)
-        return withUnsafePointer(to: &system.machine) {
-            $0.withMemoryRebound(to: CChar.self, capacity: MemoryLayout.size(ofValue: system.machine)) {
-                String(cString: $0)
-            }
+        let machine = system.machine
+        return withUnsafeBytes(of: machine) { bytes in
+            String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
         }
     }
 

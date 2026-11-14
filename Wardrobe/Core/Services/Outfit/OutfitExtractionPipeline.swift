@@ -90,7 +90,7 @@ struct OutfitExtractionPipeline: OutfitExtracting {
             guard let normalizedMask = OutfitMaskRenderer.intersection(of: selected.mask, and: region.mask) else {
                 throw OutfitExtractionError.unableToCreateCutout
             }
-            let cutout = try maskEditor.makingCutout(from: source, using: normalizedMask)
+            let cutout = GarmentCutoutCropper.crop(try maskEditor.makingCutout(from: source, using: normalizedMask), to: normalizedMask)
             let reason = region.occlusionReason ?? (OutfitMaskRenderer.touchesFrame(normalizedMask) ? .touchesFrame : nil)
             return ExtractedGarment(cutoutImage: cutout, mask: normalizedMask, guessedCategory: region.kind.suggestedCategory, isPartial: reason != nil, partialReason: reason, confidence: region.confidence)
         }
@@ -198,7 +198,8 @@ enum OutfitMaskRenderer {
         format.scale = 1
         format.opaque = true
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
-            context.cgContext.draw(cgImage, in: CGRect(origin: .zero, size: size))
+            // UIImage.draw keeps the picture upright in UIKit's flipped renderer context; CGContext.draw would invert it.
+            UIImage(cgImage: cgImage).draw(in: CGRect(origin: .zero, size: size))
             UIColor.black.setFill()
             context.fill(CGRect(x: 0, y: 0, width: size.width, height: max(0, rectangle.minY)))
             context.fill(CGRect(x: 0, y: max(0, rectangle.maxY), width: size.width, height: max(0, size.height - rectangle.maxY)))
@@ -216,9 +217,10 @@ enum OutfitMaskRenderer {
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             UIColor.white.setFill()
             context.fill(CGRect(origin: .zero, size: size))
-            context.cgContext.setBlendMode(.multiply)
-            context.cgContext.draw(firstImage, in: CGRect(origin: .zero, size: size))
-            context.cgContext.draw(secondImage, in: CGRect(origin: .zero, size: size))
+            // Multiply keeps only pixels white in both masks. UIImage.draw keeps both upright.
+            let bounds = CGRect(origin: .zero, size: size)
+            UIImage(cgImage: firstImage).draw(in: bounds, blendMode: .multiply, alpha: 1)
+            UIImage(cgImage: secondImage).draw(in: bounds, blendMode: .multiply, alpha: 1)
         }
     }
 

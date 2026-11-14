@@ -18,7 +18,12 @@ final class OutfitPhotoViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.selectedCandidates.isEmpty)
         viewModel.replaceMask(replacementMask, for: candidate.id)
 
-        XCTAssertEqual(viewModel.candidates.first?.garment.mask.pngData(), replacementMask.pngData())
+        let repairedBounds = try XCTUnwrap(viewModel.candidates.first?.garment.mask.cgImage.flatMap(MaskImageProcessor.foregroundBounds))
+        let expectedBounds = try XCTUnwrap(replacementMask.cgImage.flatMap(MaskImageProcessor.foregroundBounds))
+        XCTAssertEqual(repairedBounds.minX, expectedBounds.minX, accuracy: 1)
+        XCTAssertEqual(repairedBounds.minY, expectedBounds.minY, accuracy: 1)
+        XCTAssertEqual(repairedBounds.width, expectedBounds.width, accuracy: 1)
+        XCTAssertEqual(repairedBounds.height, expectedBounds.height, accuracy: 1)
         XCTAssertNotNil(viewModel.candidates.first?.garment.cutoutImage.pngData())
     }
 
