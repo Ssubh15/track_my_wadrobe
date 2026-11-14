@@ -171,26 +171,17 @@ enum MaskImageProcessor {
     /// reinterpreting the buffer as Float32 produces garbage.
     static func image(from array: MLMultiArray, size: CGSize) throws -> UIImage? {
         let shape = array.shape.map(\.intValue)
-        let strides = array.strides.map(\.intValue)
         guard shape.count >= 2 else { return nil }
         let height = shape[shape.count - 2], width = shape[shape.count - 1]
-        let rowStride = strides[strides.count - 2], columnStride = strides[strides.count - 1]
         let count = width * height
         guard width > 0, height > 0, array.count == count else { return nil }
-        var values = [Float](repeating: 0, count: count)
-        func read<T: MLShapedArrayScalar>(_ type: T.Type, _ convert: (T) -> Float) {
-            array.withUnsafeBufferPointer(ofType: T.self) { pointer in
-                for y in 0..<height {
-                    for x in 0..<width { values[y * width + x] = convert(pointer[y * rowStride + x * columnStride]) }
-                }
-            }
-        }
+        // MLShapedArray converts Float16/Float32/Double storage (including padded strides) to Float.
+        let values: [Float]
         switch array.dataType {
-        case .float16: read(Float16.self) { Float($0) }
-        case .float32: read(Float32.self) { $0 }
-        case .double: read(Double.self) { Float($0) }
+        case .float16, .float32, .double: values = MLShapedArray<Float>(converting: array).scalars
         default: return nil
         }
+        guard values.count == count else { return nil }
         var minimum = Float.greatestFiniteMagnitude, maximum = -Float.greatestFiniteMagnitude
         for value in values { minimum = min(minimum, value); maximum = max(maximum, value) }
         let range = max(maximum - minimum, 0.0001)
