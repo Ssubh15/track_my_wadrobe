@@ -178,7 +178,7 @@ enum MaskImageProcessor {
         let count = width * height
         guard width > 0, height > 0, array.count == count else { return nil }
         var values = [Float](repeating: 0, count: count)
-        func read<T>(_ type: T.Type, _ convert: (T) -> Float) {
+        func read<T: MLShapedArrayScalar>(_ type: T.Type, _ convert: (T) -> Float) {
             array.withUnsafeBufferPointer(ofType: T.self) { pointer in
                 for y in 0..<height {
                     for x in 0..<width { values[y * width + x] = convert(pointer[y * rowStride + x * columnStride]) }
