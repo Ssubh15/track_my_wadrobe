@@ -1,3 +1,4 @@
+import CoreML
 import UIKit
 import XCTest
 @testable import Wardrobe
@@ -36,5 +37,22 @@ final class CutoutServiceTests: XCTestCase {
         XCTAssertNotNil(bounds)
         XCTAssertLessThan(bounds?.midX ?? 40, 22)
         XCTAssertEqual(bounds?.height ?? 0, 20, accuracy: 1)
+    }
+
+    func testFloat16ModelMaskIsReadWithItsRealElementType() throws {
+        // U²-Net outputs a 1×1×320×320 Float16 mask; a left-half foreground must stay on the left.
+        let array = try MLMultiArray(shape: [1, 1, 4, 4], dataType: .float16)
+        for y in 0..<4 { for x in 0..<4 { array[[0, 0, y, x] as [NSNumber]] = NSNumber(value: x < 2 ? 1.0 : 0.0) } }
+
+        let mask = try MaskImageProcessor.image(from: array, size: CGSize(width: 40, height: 40))
+        let bounds = mask?.cgImage.flatMap { MaskImageProcessor.foregroundBounds(in: $0) }
+
+        XCTAssertNotNil(bounds)
+        XCTAssertLessThan(bounds?.maxX ?? 40, 25)
+        XCTAssertEqual(bounds?.height ?? 0, 40, accuracy: 2)
+    }
+
+    func testBundledU2NetModelIsFoundByCutoutService() {
+        XCTAssertNotNil(Bundle.main.url(forResource: "U2NetP", withExtension: "mlmodelc"), "U2NetP.mlmodelc must be in the app bundle")
     }
 }

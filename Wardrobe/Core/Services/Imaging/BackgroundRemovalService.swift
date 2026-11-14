@@ -55,7 +55,7 @@ struct CoreMLCutoutService: CutoutService {
 
     init(fallback: any CutoutService = VisionCutoutService(), modelURL: URL? = nil) {
         self.fallback = fallback
-        self.modelURL = modelURL ?? Bundle.main.url(forResource: "U2Net", withExtension: "mlmodelc")
+        self.modelURL = modelURL ?? Bundle.main.url(forResource: "U2NetP", withExtension: "mlmodelc")
     }
 
     func removeBackground(from image: UIImage) async throws -> BackgroundRemovalResult {
@@ -70,22 +70,40 @@ struct CoreMLCutoutService: CutoutService {
     }
 
     private static func makeResult(from image: UIImage, modelURL: URL?) throws -> BackgroundRemovalResult {
-        guard let source = MaskImageProcessor.normalizedUpImage(image), let sourceCGImage = source.cgImage, let modelURL else { throw BackgroundRemovalError.modelUnavailable }
+        guard let source = MaskImageProcessor.normalizedUpImage(image), let sourceCGImage = source.cgImage else { throw BackgroundRemovalError.unsupportedImage }
+        guard let modelURL else {
+            recordStatus("U2NetP.mlmodelc missing from app bundle; used Apple Vision")
+            throw BackgroundRemovalError.modelUnavailable
+        }
         let model: MLModel
         do {
             model = try MLModel(contentsOf: modelURL)
-            UserDefaults.standard.set("U2NetP loaded", forKey: OutfitDiagnostics.u2NetStatusKey)
         } catch {
-            UserDefaults.standard.set("U2NetP failed: \(error.localizedDescription)", forKey: OutfitDiagnostics.u2NetStatusKey)
+            recordStatus("U2NetP failed to load: \(error.localizedDescription); used Apple Vision")
             throw error
         }
         guard model.modelDescription.inputDescriptionsByName["image"]?.type == .image,
-              let pixelBuffer = try makePixelBuffer(from: sourceCGImage, size: 320) else { throw BackgroundRemovalError.modelUnavailable }
+              let pixelBuffer = try makePixelBuffer(from: sourceCGImage, size: 320) else {
+            recordStatus("U2NetP input mismatch; used Apple Vision")
+            throw BackgroundRemovalError.modelUnavailable
+        }
         let prediction = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["image": MLFeatureValue(pixelBuffer: pixelBuffer)]))
-        guard let output = prediction.featureNames.compactMap({ prediction.featureValue(for: $0)?.multiArrayValue }).first,
-              let mask = try MaskImageProcessor.image(from: output, size: CGSize(width: sourceCGImage.width, height: sourceCGImage.height)),
-              MaskImageProcessor.passesQualityCheck(mask) else { throw BackgroundRemovalError.maskQualityTooLow }
+        guard let output = prediction.featureValue(for: "mask")?.multiArrayValue
+                ?? prediction.featureNames.sorted().compactMap({ prediction.featureValue(for: $0)?.multiArrayValue }).first,
+              let mask = try MaskImageProcessor.image(from: output, size: CGSize(width: sourceCGImage.width, height: sourceCGImage.height)) else {
+            recordStatus("U2NetP output unreadable; used Apple Vision")
+            throw BackgroundRemovalError.maskQualityTooLow
+        }
+        guard MaskImageProcessor.passesQualityCheck(mask) else {
+            recordStatus("U2NetP ran, but its mask failed the quality check; used Apple Vision")
+            throw BackgroundRemovalError.maskQualityTooLow
+        }
+        recordStatus("U2NetP used")
         return try MaskImageProcessor.result(source: source, mask: mask, extractionModel: .u2Net)
+    }
+
+    private static func recordStatus(_ status: String) {
+        UserDefaults.standard.set(status, forKey: OutfitDiagnostics.u2NetStatusKey)
     }
 
     private static func makePixelBuffer(from image: CGImage, size: Int) throws -> CVPixelBuffer? {
@@ -148,17 +166,37 @@ enum MaskImageProcessor {
         return UIGraphicsImageRenderer(size: size, format: format).image { _ in mask.draw(in: CGRect(origin: .zero, size: size)) }
     }
 
+    /// Converts a model mask (e.g. U²-Net's 1×1×320×320 Float16 `mask`) into a grayscale image.
+    /// Reads the array with its real element type and strides; U²-Net emits Float16, so
+    /// reinterpreting the buffer as Float32 produces garbage.
     static func image(from array: MLMultiArray, size: CGSize) throws -> UIImage? {
-        let values = array.dataPointer.assumingMemoryBound(to: Float32.self)
-        let count = array.count
-        guard count > 0 else { return nil }
+        let shape = array.shape.map(\.intValue)
+        let strides = array.strides.map(\.intValue)
+        guard shape.count >= 2 else { return nil }
+        let height = shape[shape.count - 2], width = shape[shape.count - 1]
+        let rowStride = strides[strides.count - 2], columnStride = strides[strides.count - 1]
+        let count = width * height
+        guard width > 0, height > 0, array.count == count else { return nil }
+        var values = [Float](repeating: 0, count: count)
+        func read<T>(_ type: T.Type, _ convert: (T) -> Float) {
+            array.withUnsafeBufferPointer(ofType: T.self) { pointer in
+                for y in 0..<height {
+                    for x in 0..<width { values[y * width + x] = convert(pointer[y * rowStride + x * columnStride]) }
+                }
+            }
+        }
+        switch array.dataType {
+        case .float16: read(Float16.self) { Float($0) }
+        case .float32: read(Float32.self) { $0 }
+        case .double: read(Double.self) { Float($0) }
+        default: return nil
+        }
         var minimum = Float.greatestFiniteMagnitude, maximum = -Float.greatestFiniteMagnitude
-        for index in 0..<count { minimum = min(minimum, values[index]); maximum = max(maximum, values[index]) }
-        let side = Int(sqrt(Double(count))); guard side * side == count else { return nil }
+        for value in values { minimum = min(minimum, value); maximum = max(maximum, value) }
         let range = max(maximum - minimum, 0.0001)
         var pixels = [UInt8](repeating: 0, count: count)
         for index in 0..<count { pixels[index] = UInt8(max(0, min(255, ((values[index] - minimum) / range) * 255))) }
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData), let cgImage = CGImage(width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: side, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue), provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+        guard let provider = CGDataProvider(data: Data(pixels) as CFData), let cgImage = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue), provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
         return resizeMask(UIImage(cgImage: cgImage), to: size)
     }
 
