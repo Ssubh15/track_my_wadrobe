@@ -1,0 +1,4 @@
+Wardrobe/Features/AddItem/OutfitMode/Segmentation/Model/OOTDClothSegmenter_w8.mlpackage/** filter=lfs diff=lfs merge=lfs -text
+tools/ootd_model/OOTDClothSegmenter.mlpackage/** filter=lfs diff=lfs merge=lfs -text
+tools/ootd_model/OOTDClothSegmenter_w8.mlpackage/** filter=lfs diff=lfs merge=lfs -text
+* !text !filter !merge !diff

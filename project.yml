@@ -1,0 +1,89 @@
+name: Wardrobe
+
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "17.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0.0
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug]: "$(inherited) DEBUG"
+
+targets:
+  Wardrobe:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Wardrobe
+      - path: Wardrobe/Features/AddItem/OutfitMode/Segmentation/Model/OOTDClothSegmenter_w8.mlpackage
+      - path: Models/U2NetP.mlpackage
+        buildPhase: resources
+    postBuildScripts:
+      - name: Copy optional OOTD debug assets
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" = "Debug" ]; then
+            resource_directory="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+            for asset_name in OOTDTestImages golden; do
+              source_directory="$SRCROOT/Wardrobe/Resources/Debug/$asset_name"
+              if [ -d "$source_directory" ]; then
+                /usr/bin/ditto "$source_directory" "$resource_directory/$asset_name"
+              fi
+            done
+          fi
+    info:
+      path: Wardrobe/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Wardrobe
+        UILaunchScreen: {}
+        NSCameraUsageDescription: Wardrobe uses the camera to let you photograph garments for your private wardrobe.
+        NSPhotoLibraryUsageDescription: Wardrobe uses your photo library only when you choose a garment or outfit photo to add to your private wardrobe.
+        NSPhotoLibraryAddUsageDescription: Wardrobe saves images to your photo library only when you explicitly choose to export one.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.wardrobe
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+
+  WardrobeTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: WardrobeTests
+    dependencies:
+      - target: Wardrobe
+
+  WardrobeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: WardrobeUITests
+    dependencies:
+      - target: Wardrobe
+
+schemes:
+  Wardrobe:
+    shared: true
+    build:
+      targets:
+        Wardrobe: all
+    test:
+      targets:
+        - WardrobeTests
+        - WardrobeUITests
+    run:
+      config: Debug
+    profile:
+      config: Release
+    archive:
+      config: Release

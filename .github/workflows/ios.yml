@@ -1,0 +1,157 @@
+name: iOS
+
+on:
+  # Build and publish the installable artifact for every main update.
+  push:
+    branches:
+      - main
+  # Validate proposed changes before they are merged.
+  pull_request:
+
+jobs:
+  build-and-test:
+    # iOS builds require Apple's macOS tooling.
+    runs-on: macos-latest
+
+    steps:
+      # Check out the source used by this workflow run.
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify checked-in OOTD model package
+        run: test -f Wardrobe/Features/AddItem/OutfitMode/Segmentation/Model/OOTDClothSegmenter_w8.mlpackage/Manifest.json
+
+      # XcodeGen includes this package as an app resource. It is stored compressed in git.
+      - name: Unpack Core ML model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Models/_tmp
+          unzip -o Models/U2NetP.mlpackage.zip -d Models/_tmp
+          MANIFEST="$(find Models/_tmp -name Manifest.json -print -quit)"
+          test -n "$MANIFEST"
+          rm -rf Models/U2NetP.mlpackage
+          mv "$(dirname "$MANIFEST")" Models/U2NetP.mlpackage
+          rm -rf Models/_tmp
+
+      # Install XcodeGen, which creates the uncommitted Xcode project from project.yml.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Stage OOTD debug evaluation assets
+        run: bash scripts/stage_ootd_debug_assets.sh
+
+      # Generate Wardrobe.xcodeproj for this temporary CI workspace.
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build debug app for iPhone
+        run: >
+          xcodebuild build
+          -project Wardrobe.xcodeproj
+          -scheme Wardrobe
+          -configuration Debug
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/DebugDerivedData
+          CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify debug evaluation assets are bundled
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DebugDerivedData/Build/Products/Debug-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH/OOTDTestImages"
+          test -d "$APP_PATH/golden"
+          test "$(find "$APP_PATH/OOTDTestImages" -type f | wc -l | tr -d ' ')" -gt 0
+          test "$(find "$APP_PATH/golden" -type f -name '*.png' | wc -l | tr -d ' ')" -gt 0
+          if find "$APP_PATH/OOTDTestImages" -type f | grep -q 'gitkeep'; then
+            echo "Placeholder files were copied as images." >&2
+            exit 1
+          fi
+
+      - name: Verify Release excludes OOTD debug assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test ! -e "$APP_PATH/OOTDTestImages"
+          test ! -e "$APP_PATH/golden"
+
+      # Find an available iPhone simulator dynamically, then boot it before testing.
+      - name: Find and boot an iPhone simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIMULATOR_UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json
+          import sys
+
+          devices = json.load(sys.stdin)["devices"]
+          iphones = [
+              device
+              for runtime_devices in devices.values()
+              for device in runtime_devices
+              if device["isAvailable"] and "iPhone" in device["name"]
+          ]
+          print(iphones[0]["udid"] if iphones else "")
+          ')"
+          test -n "$SIMULATOR_UDID"
+          echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_UDID" || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
+      # Build the app and run only the unit-test target on the discovered simulator.
+      - name: Run unit tests
+        run: >
+          xcodebuild test
+          -project Wardrobe.xcodeproj
+          -scheme Wardrobe
+          -destination "platform=iOS Simulator,id=${SIMULATOR_UDID}"
+          -only-testing:WardrobeTests
+          CODE_SIGNING_ALLOWED=NO
+
+      # Build a device-ready Release app without a signing identity.
+      - name: Build unsigned device app
+        run: >
+          xcodebuild build
+          -project Wardrobe.xcodeproj
+          -scheme Wardrobe
+          -configuration Release
+          -destination 'generic/platform=iOS'
+          -derivedDataPath build/DerivedData
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGN_IDENTITY=""
+          DEVELOPMENT_TEAM=""
+
+      - name: Verify OOTD model is compiled into the app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH/OOTDClothSegmenter_w8.mlmodelc" || test -d "$APP_PATH/Frameworks/OOTDClothSegmenter_w8.mlmodelc"
+
+      # Wrap the unsigned .app in the standard Payload directory required by an IPA.
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$PWD/build/DerivedData/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p build/ipa/Payload
+          cp -R "$APP_PATH" build/ipa/Payload/
+          ditto -c -k --sequesterRsrc --keepParent build/ipa/Payload build/Wardrobe.ipa
+          test -f build/Wardrobe.ipa
+
+      # Retain the IPA so it can be downloaded from the completed Actions run.
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: wardrobe-ipa
+          path: build/Wardrobe.ipa
+          if-no-files-found: error

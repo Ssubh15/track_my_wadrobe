@@ -1,0 +1,100 @@
+name: Build iOS
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Verify checked-in OOTD Core ML packages
+        run: |
+          test -f tools/ootd_model/OOTDClothSegmenter.mlpackage/Manifest.json
+          test -f tools/ootd_model/OOTDClothSegmenter_w8.mlpackage/Manifest.json
+          test -f Wardrobe/Features/AddItem/OutfitMode/Segmentation/Model/OOTDClothSegmenter_w8.mlpackage/Manifest.json
+
+      - name: Unpack Core ML model
+        run: |
+          # 1. Target directory relative to root
+          TARGET_DIR="Models"
+          
+          rm -rf "$TARGET_DIR/_tmp"
+          mkdir -p "$TARGET_DIR/_tmp"
+          
+          unzip -o "$TARGET_DIR/U2NetP.mlpackage.zip" -d "$TARGET_DIR/_tmp"
+          
+          MAN=$(find "$TARGET_DIR/_tmp" -name Manifest.json | head -n 1)
+          test -n "$MAN" || { echo "No Manifest.json found: this zip is not a Core ML package"; exit 1; }
+          
+          # Clean and move into root Models/
+          rm -rf "$TARGET_DIR/U2NetP.mlpackage"
+          mv "$(dirname "$MAN")" "$TARGET_DIR/U2NetP.mlpackage"
+          rm -rf "$TARGET_DIR/_tmp"
+          
+          # Fix for nested working directory runner path issues:
+          # Creates a symlink or copy if xcodegen checks runner/work/Wardrobe-app/Wardrobe-app/
+          mkdir -p Wardrobe-app/Models
+          cp -R Models/U2NetP.mlpackage Wardrobe-app/Models/ || true
+          
+          echo "Verified model path structure:"
+          ls -ld Models/U2NetP.mlpackage
+
+
+     
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild \
+            -project Wardrobe.xcodeproj \
+            -scheme Wardrobe \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Verify OOTD model is compiled into the app
+        run: |
+          APP_PATH="$(find "$PWD/build/Build/Products/Release-iphoneos" -type d -name 'Wardrobe.app' -print -quit)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH/OOTDClothSegmenter_w8.mlmodelc" || test -d "$APP_PATH/Frameworks/OOTDClothSegmenter_w8.mlmodelc"
+
+      - name: Upload OOTD Core ML packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ootd-coreml-packages
+          path: |
+            tools/ootd_model/OOTDClothSegmenter.mlpackage
+            tools/ootd_model/OOTDClothSegmenter_w8.mlpackage
+            tools/ootd_model/labels.json
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/Wardrobe.app Payload/
+          zip -r Wardrobe.ipa Payload
+
+      - name: Verify model is compiled into the app
+        run: |
+          test -d Payload/Wardrobe.app/U2NetP.mlmodelc || test -d Payload/Wardrobe.app/Frameworks/U2NetP.mlmodelc
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wardrobe-ipa
+          path: Wardrobe.ipa
