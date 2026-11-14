@@ -68,6 +68,40 @@ final class MaskEditingServiceTests: XCTestCase {
         XCTAssertLessThan(try XCTUnwrap(Self.topLeftPixel(in: cutout, x: 10, y: 30)).a, 5, "bottom rows must stay empty")
     }
 
+    func testBrushEditKeepsMaskUpright() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 20, height: 40)
+        let mask = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.black.setFill(); context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 10))
+        }
+        let edited = try editor.applying(MaskBrushStroke(points: [CGPoint(x: 0.5, y: 0.9)], diameter: 0.05, tool: .erase), to: mask)
+        let bounds = try XCTUnwrap(edited.cgImage.flatMap(MaskImageProcessor.foregroundBounds))
+        XCTAssertEqual(bounds.minY, 0, accuracy: 1)
+        XCTAssertEqual(bounds.height, 10, accuracy: 1, "white band must stay at the top")
+    }
+
+    func testMaskIntersectionKeepsOrientation() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 20, height: 40)
+        func band(_ rect: CGRect) -> UIImage {
+            UIGraphicsImageRenderer(size: size, format: format).image { context in
+                UIColor.black.setFill(); context.fill(CGRect(origin: .zero, size: size))
+                UIColor.white.setFill(); context.fill(rect)
+            }
+        }
+        let result = try XCTUnwrap(OutfitMaskRenderer.intersection(of: band(CGRect(x: 0, y: 5, width: 20, height: 10)), and: band(CGRect(x: 0, y: 0, width: 20, height: 40))))
+        let bounds = try XCTUnwrap(result.cgImage.flatMap(MaskImageProcessor.foregroundBounds))
+        XCTAssertEqual(bounds.minY, 5, accuracy: 1)
+        XCTAssertEqual(bounds.height, 10, accuracy: 1)
+        let rect = try XCTUnwrap(OutfitMaskRenderer.intersecting(band(CGRect(x: 0, y: 0, width: 20, height: 40)), with: CGRect(x: 0, y: 25, width: 20, height: 10)))
+        let rectBounds = try XCTUnwrap(rect.cgImage.flatMap(MaskImageProcessor.foregroundBounds))
+        XCTAssertEqual(rectBounds.minY, 25, accuracy: 1)
+        XCTAssertEqual(rectBounds.height, 10, accuracy: 1)
+    }
+
     private static func topLeftPixel(in image: UIImage, x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int)? {
         guard let cgImage = image.cgImage else { return nil }
         let width = cgImage.width, height = cgImage.height

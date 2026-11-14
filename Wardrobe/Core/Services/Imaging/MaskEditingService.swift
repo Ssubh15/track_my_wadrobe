@@ -62,7 +62,8 @@ struct MaskEditingService: MaskEditing {
             let context = rendererContext.cgContext
             context.setFillColor(UIColor.black.cgColor)
             context.fill(CGRect(origin: .zero, size: size))
-            context.draw(maskImage, in: CGRect(origin: .zero, size: size))
+            // UIImage.draw keeps the mask upright in UIKit's flipped renderer context, matching the stroke coordinates.
+            UIImage(cgImage: maskImage).draw(in: CGRect(origin: .zero, size: size))
             context.setStrokeColor((stroke.tool == .erase ? UIColor.black : UIColor.white).cgColor)
             context.setFillColor((stroke.tool == .erase ? UIColor.black : UIColor.white).cgColor)
             context.setLineWidth(brushDiameter)
