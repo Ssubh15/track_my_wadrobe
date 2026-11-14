@@ -141,7 +141,7 @@ final class DetectedGarmentsViewModel {
             guard let safeMask = OutfitMaskRenderer.intersection(of: mask, and: candidates[index].allowedMask) else {
                 throw OutfitExtractionError.unableToCreateCutout
             }
-            let cutout = try maskEditor.makingCutout(from: sourceImage, using: safeMask)
+            let cutout = GarmentCutoutCropper.crop(try maskEditor.makingCutout(from: sourceImage, using: safeMask), to: safeMask)
             candidates[index].garment = ExtractedGarment(
                 cutoutImage: cutout, mask: safeMask, guessedCategory: candidates[index].garment.guessedCategory,
                 isPartial: candidates[index].garment.isPartial, partialReason: candidates[index].garment.partialReason,
@@ -155,10 +155,11 @@ final class DetectedGarmentsViewModel {
         guard let base = candidates.first?.garment.mask,
               let bounds = base.cgImage.flatMap(MaskImageProcessor.foregroundBounds),
               let mask = OutfitMaskRenderer.intersecting(base, with: CGRect(x: bounds.minX, y: bounds.midY, width: bounds.width, height: bounds.height / 2)),
-              let cutout = try? maskEditor.makingCutout(from: sourceImage, using: mask) else {
+              let fullCutout = try? maskEditor.makingCutout(from: sourceImage, using: mask) else {
             errorMessage = "Add a detected item before adding another outline."
             return
         }
+        let cutout = GarmentCutoutCropper.crop(fullCutout, to: mask)
         candidates.append(Candidate(garment: ExtractedGarment(cutoutImage: cutout, mask: mask, guessedCategory: .accessory, isPartial: false, partialReason: nil, confidence: 0), allowedMask: mask))
     }
 }
@@ -280,13 +281,13 @@ final class OutfitReviewQueueViewModel {
     var errorMessage: String?
     var isSaving = false
 
-    init(candidates: [DetectedGarmentsViewModel.Candidate], repository: any WardrobeRepository, imageStore: any ImageStore) {
+    init(candidates: [DetectedGarmentsViewModel.Candidate], repository: any WardrobeRepository, imageStore: any ImageStore, segmenterModelName: String = OutfitDiagnostics.currentSegmenterName) {
         let groupID = UUID()
         sourceGroupID = groupID
         itemViewModels = candidates.map {
             ReviewItemViewModel(image: $0.garment.cutoutImage, repository: repository, imageStore: imageStore,
                                 initialCategory: $0.garment.guessedCategory, imageSource: .outfitPhoto,
-                                sourceGroupID: groupID, isPartial: $0.garment.isPartial)
+                                sourceGroupID: groupID, isPartial: $0.garment.isPartial, extractionModelName: segmenterModelName)
         }
     }
 

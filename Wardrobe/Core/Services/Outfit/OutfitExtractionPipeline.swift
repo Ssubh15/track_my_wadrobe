@@ -90,7 +90,7 @@ struct OutfitExtractionPipeline: OutfitExtracting {
             guard let normalizedMask = OutfitMaskRenderer.intersection(of: selected.mask, and: region.mask) else {
                 throw OutfitExtractionError.unableToCreateCutout
             }
-            let cutout = try maskEditor.makingCutout(from: source, using: normalizedMask)
+            let cutout = GarmentCutoutCropper.crop(try maskEditor.makingCutout(from: source, using: normalizedMask), to: normalizedMask)
             let reason = region.occlusionReason ?? (OutfitMaskRenderer.touchesFrame(normalizedMask) ? .touchesFrame : nil)
             return ExtractedGarment(cutoutImage: cutout, mask: normalizedMask, guessedCategory: region.kind.suggestedCategory, isPartial: reason != nil, partialReason: reason, confidence: region.confidence)
         }

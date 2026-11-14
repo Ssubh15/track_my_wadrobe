@@ -5,7 +5,9 @@ import XCTest
 
 final class CutoutServiceTests: XCTestCase {
     func testOrientationIsNormalizedToUpBeforeInference() {
-        let base = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 60)).image { context in
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let base = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 60), format: format).image { context in
             UIColor.red.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 100, height: 60))
         }

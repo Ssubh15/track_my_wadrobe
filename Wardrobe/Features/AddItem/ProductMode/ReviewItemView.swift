@@ -8,6 +8,8 @@ final class ReviewItemViewModel {
     enum State: Equatable { case editing, saving, success, failed(String) }
 
     let image: UIImage
+    /// Name of the model that produced the cut-out, shown under the image. Nil hides the line.
+    let extractionModelName: String?
     private let repository: any WardrobeRepository
     private let imageStore: any ImageStore
     private(set) var draft: DraftItem
@@ -29,8 +31,10 @@ final class ReviewItemViewModel {
          draft: DraftItem? = nil, initialCategory: GarmentCategory = .other,
          initialColor: String? = nil, initialPattern: String? = nil,
          initialFit: String? = nil, initialSeason: String? = nil, initialBrand: String? = nil,
-         imageSource: ImageSource = .productPhoto, sourceGroupID: UUID? = nil, isPartial: Bool = false) {
+         imageSource: ImageSource = .productPhoto, sourceGroupID: UUID? = nil, isPartial: Bool = false,
+         extractionModelName: String? = nil) {
         self.image = image
+        self.extractionModelName = extractionModelName
         self.repository = repository
         self.imageStore = imageStore
         let draft = draft ?? DraftItem(category: initialCategory, imageSource: imageSource)
@@ -168,6 +172,10 @@ struct ReviewItemView: View {
             Section {
                 Image(uiImage: viewModel.image).resizable().scaledToFit().frame(maxHeight: 260)
                     .frame(maxWidth: .infinity).accessibilityLabel("Garment cut-out")
+                if let modelName = viewModel.extractionModelName {
+                    Text("Segmented by: \(modelName)").font(.caption).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
             }
             Section("Details") {
                 Picker("Category", selection: $viewModel.category) {

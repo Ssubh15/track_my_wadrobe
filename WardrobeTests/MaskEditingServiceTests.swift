@@ -46,6 +46,42 @@ final class MaskEditingServiceTests: XCTestCase {
         XCTAssertEqual(source.pngData(), sourceData)
     }
 
+    func testCutoutKeepsMaskedTopRegionWithoutVerticalFlip() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let size = CGSize(width: 20, height: 40)
+        let source = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+            UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 20, width: 20, height: 20))
+        }
+        // White over the top quarter only (rows 0..<10 counted from the top of the picture).
+        let mask = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.black.setFill(); context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 20, height: 10))
+        }
+        let cutout = try editor.makingCutout(from: source, using: mask)
+        let kept = try XCTUnwrap(Self.topLeftPixel(in: cutout, x: 10, y: 5))
+        XCTAssertGreaterThan(kept.a, 250)
+        XCTAssertGreaterThan(kept.r, 250)
+        XCTAssertLessThan(kept.b, 5)
+        XCTAssertLessThan(try XCTUnwrap(Self.topLeftPixel(in: cutout, x: 10, y: 15)).a, 5, "unmasked red rows must be removed")
+        XCTAssertLessThan(try XCTUnwrap(Self.topLeftPixel(in: cutout, x: 10, y: 30)).a, 5, "bottom rows must stay empty")
+    }
+
+    private static func topLeftPixel(in image: UIImage, x: Int, y: Int) -> (r: Int, g: Int, b: Int, a: Int)? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = cgImage.width, height = cgImage.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn, x < width, y < height else { return nil }
+        let offset = (y * width + x) * 4
+        return (Int(bytes[offset]), Int(bytes[offset + 1]), Int(bytes[offset + 2]), Int(bytes[offset + 3]))
+    }
+
     @MainActor
     func testViewModelUndoAndRedoRestoreMaskRevisions() {
         let initialMask = solidMask(.white)

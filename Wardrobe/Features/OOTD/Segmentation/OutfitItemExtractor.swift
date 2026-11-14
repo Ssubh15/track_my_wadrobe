@@ -54,8 +54,6 @@ struct OutfitItemExtractor {
         return groups.compactMap { classSet, category in
             var binary = labels.map { classSet.contains($0) }
             if !dominantDress && classSet.contains(ClothClass.dress.rawValue) {
-                let bottomArea = pantsArea + skirtArea
-                guard dressArea < bottomArea else { return nil }
                 let bottomLabels: Set<UInt8> = [ClothClass.pants.rawValue, ClothClass.skirt.rawValue]
                 let dressComponents = components(in: labels.map { $0 == ClothClass.dress.rawValue }, width: map.width, height: map.height)
                 for component in dressComponents {
@@ -136,14 +134,9 @@ struct OutfitItemExtractor {
                 }
             }
         }
-        guard let fullCutout = try? MaskEditingService().makingCutout(from: UIImage(cgImage: source), using: maskImage) else { return nil }
-        let cropSize = rect.integral.size
-        let cropFormat = UIGraphicsImageRendererFormat()
-        cropFormat.scale = 1
-        cropFormat.opaque = false
-        let cutout = UIGraphicsImageRenderer(size: cropSize, format: cropFormat).image { _ in
-            fullCutout.draw(at: CGPoint(x: -rect.integral.minX, y: -rect.integral.minY))
-        }
+        guard let fullCutout = try? MaskEditingService().makingCutout(from: UIImage(cgImage: source), using: maskImage),
+              let croppedCG = fullCutout.cgImage?.cropping(to: rect.integral) else { return nil }
+        let cutout = UIImage(cgImage: croppedCG, scale: 1, orientation: .up)
         return OutfitItem(category: category, cutoutPNG: cutout.pngData() ?? Data(), cutoutImage: cutout, mask: maskImage, pixelAreaShare: share)
     }
 
