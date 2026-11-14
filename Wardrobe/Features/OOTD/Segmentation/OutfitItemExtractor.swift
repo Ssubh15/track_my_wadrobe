@@ -22,7 +22,7 @@ struct OutfitItemExtractor {
     func extract(from map: ClothLabelMap, image: UIImage) -> [OutfitItem] {
         guard map.width > 0, map.height > 0, map.labels.count == map.width * map.height,
               let source = normalizedCGImage(image) else { return [] }
-        let labels = map.labels
+        let labels = TorsoLabelCorrector.correct(map.labels, width: map.width, height: map.height)
         let personArea = labels.reduce(into: 0) { if $1 != ClothClass.background.rawValue { $0 += 1 } }
         guard personArea > 0 else { return [] }
 

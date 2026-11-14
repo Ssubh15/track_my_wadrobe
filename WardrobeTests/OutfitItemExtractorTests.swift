@@ -61,6 +61,29 @@ final class OutfitItemExtractorTests: XCTestCase {
         XCTAssertLessThan(center.blue, 0.1)
     }
 
+    func testTorsoMislabelledAsTrousersMovesBackToTop() {
+        var labels = [UInt8](repeating: 0, count: 512 * 512)
+        // Sleeves either side, and a top band across the chest.
+        fill(&labels, x: 150..<190, y: 100..<260, label: 4)
+        fill(&labels, x: 320..<360, y: 100..<260, label: 4)
+        fill(&labels, x: 190..<320, y: 100..<140, label: 4)
+        // Trousers wrongly start on the chest; the top still reaches the centre at y 220.
+        fill(&labels, x: 190..<320, y: 140..<480, label: 6)
+        fill(&labels, x: 240..<270, y: 200..<220, label: 4)
+
+        let corrected = TorsoLabelCorrector.correct(labels, width: 512, height: 512)
+        XCTAssertEqual(corrected[180 * 512 + 255], ClothClass.upperClothes.rawValue)
+        XCTAssertEqual(corrected[400 * 512 + 255], ClothClass.pants.rawValue)
+    }
+
+    func testLongTopDoesNotEatTrousers() {
+        var labels = [UInt8](repeating: 0, count: 512 * 512)
+        fill(&labels, x: 190..<320, y: 100..<200, label: 6)
+        fill(&labels, x: 190..<320, y: 200..<400, label: 6)
+        fill(&labels, x: 240..<270, y: 100..<350, label: 4)
+        XCTAssertEqual(TorsoLabelCorrector.correct(labels, width: 512, height: 512), labels)
+    }
+
     private func map(_ labels: [UInt8]) -> ClothLabelMap { ClothLabelMap(width: 512, height: 512, labels: labels, originalSize: CGSize(width: 512, height: 512), sourceToModelTransform: .stretched(sourceSize: CGSize(width: 512, height: 512), modelSize: CGSize(width: 512, height: 512)), inferenceMs: 0) }
     private func image() -> UIImage {
         UIGraphicsImageRenderer(size: CGSize(width: 512, height: 512)).image { ctx in
